@@ -1,4 +1,4 @@
-# Ensoniq EPS-16 Plus Audio Unit and VST3 Emulator
+EPS-16 Plus Audio Unit and VST3 Emulator
 
 Hardware-level emulation of the Ensoniq EPS-16 Plus sampler for macOS and
 Windows, built as a resizable Audio Unit and VST3 instrument.
