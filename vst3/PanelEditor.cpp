@@ -1699,6 +1699,10 @@ void Eps16PanelEditor::paint(juce::Graphics &graphics) {
     // glow reads as light escaping from behind the glass rather than
     // sitting on top of it.
     paintVfdHalo(graphics, scale);
+    // drawImage() composites at the context's current opacity, and the
+    // halo leaves it at its last segment's tiny, animated alpha - which
+    // hid the track LED sprite below and made it shimmer with the halo.
+    graphics.setOpacity(1.0f);
 
     // Track LED drawing — dynamic emulator state, not baked into the
     // background PNG. track_led.png is three vertically stacked frames of
