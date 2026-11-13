@@ -16,6 +16,17 @@ constexpr int expandedRackHeight = rackHeight + keyboardHeight;
 const juce::Colour buttonColour{0xff252625};
 const juce::Colour displayColour{0xff55eaff};
 const juce::Colour displayDimColour{0xff17353a};
+/* VfdLabel::paint() fills its entire bounds with opaque black
+   (findColour(Label::backgroundColourId)), square-cornered, exactly the
+   vfd rect, and JUCE paints children after their parent - so the glow
+   must start flush at that rect, not pushed out into the background
+   artwork's cutout surround (which the label paints over completely).
+   Kept even at 0: the knob for tucking the glow under the glass later,
+   where negative values are valid; removing them would mean
+   re-deriving this. vfdHaloBand() and paintVfdHalo() both read these -
+   not two independently-declared copies - so they cannot disagree. */
+constexpr float vfdHaloBezelOffsetX = 0.0f;
+constexpr float vfdHaloBezelOffsetY = 0.0f;
 const juce::Colour rackLabelColour{0xffe8e5df};
 
 /* Development-time overrides live alongside the ROM/OS files the user
@@ -956,21 +967,25 @@ juce::Rectangle<int> Eps16PanelEditor::designRect(const juce::String &name,
    style/intensity/cycle/spread here; the "vfdHalo" name is never treated
    as a position. style 0 = off, 1 = breathe, 2 = drift, 3 = shimmer;
    intensity is a percent (peakAlpha); cycle is tenths of a second
-   (periodSec); spread is design units. */
+   (periodSec); spread is design units. One definition, used by both
+   vfdHaloBand() and paintVfdHalo(), so they cannot disagree about it. */
+juce::Rectangle<int> Eps16PanelEditor::vfdHaloConfig() const {
+    return designRect("vfdHalo", 3, 5, 25, 8);
+}
+
 juce::Rectangle<float>
 Eps16PanelEditor::vfdHaloBand(juce::Rectangle<float> vfdDesign) const {
-    constexpr float bezelOffsetX = 5.0f;
-    constexpr float bezelOffsetY = 3.5f;
-    const auto config = designRect("vfdHalo", 3, 5, 25, 8);
+    const auto config = vfdHaloConfig();
     if (config.getX() <= 0) return {};
     const float spread = (float)juce::jmax(0, config.getHeight());
-    return vfdDesign.expanded(bezelOffsetX + spread, bezelOffsetY + spread);
+    return vfdDesign.expanded(vfdHaloBezelOffsetX + spread,
+                              vfdHaloBezelOffsetY + spread);
 }
 
 void Eps16PanelEditor::paintVfdHalo(juce::Graphics &graphics,
                                     juce::Rectangle<float> vfdDesign,
                                     float scale) const {
-    const auto config = designRect("vfdHalo", 3, 5, 25, 8);
+    const auto config = vfdHaloConfig();
     const int style = config.getX();
     if (style <= 0) return;
     const double peakAlpha = (double)juce::jlimit(0, 100, config.getY()) / 100.0;
@@ -982,21 +997,20 @@ void Eps16PanelEditor::paintVfdHalo(juce::Graphics &graphics,
     // this came from) rather than the layout file - only style, intensity,
     // cycle and spread are meant to be tunable there.
     constexpr double depth = 0.80;
-    // The bezel gap is not uniform (measured off panel_background.png:
-    // ~5 units horizontally, ~3.5 vertically), so it is not one constant.
-    constexpr float bezelOffsetX = 5.0f;
-    constexpr float bezelOffsetY = 3.5f;
-    // A true offset curve (radius = distance expanded outward) reads as a
-    // bubble around a square cutout; damp it instead of tracking the full
-    // offset.
-    constexpr float cornerBase = 1.0f;
-    constexpr float cornerGrowth = 0.30f;
+    // fillAll() does no corner rounding at all, so with both bezel offsets
+    // at 0 there is no base radius either - the radius is pure growth.
+    constexpr float cornerBase = 0.0f;
+    constexpr float cornerGrowth = 0.25f;
     constexpr int rings = 14;
     constexpr double falloffExp = 1.9;
 
-    // Start at the cutout, not the glass, or the glow reads as plastic
-    // glowing rather than light escaping from behind it.
-    const auto base = vfdDesign.expanded(bezelOffsetX, bezelOffsetY);
+    // Centred on the screen's own edge (vfdHaloBezelOffsetX/Y), not the
+    // background artwork's cutout surround: the innermost rings are drawn
+    // half underneath VfdLabel's opaque black fill, which paints after
+    // this (JUCE paints children after their parent) - that is what makes
+    // the glow read as light escaping from behind the glass rather than a
+    // ring sitting on the panel, not a clipping bug.
+    const auto base = vfdDesign.expanded(vfdHaloBezelOffsetX, vfdHaloBezelOffsetY);
     const auto centre = base.getCentre();
     const double now = juce::Time::getMillisecondCounterHiRes() / 1000.0;
     const double omega = juce::MathConstants<double>::twoPi / periodSec;
@@ -1028,7 +1042,8 @@ void Eps16PanelEditor::paintVfdHalo(juce::Graphics &graphics,
 
         const auto ringRect = base.expanded(grow);
         const float cornerRadius =
-            cornerBase + (juce::jmax(bezelOffsetX, bezelOffsetY) + grow) * cornerGrowth;
+            cornerBase +
+            (juce::jmax(vfdHaloBezelOffsetX, vfdHaloBezelOffsetY) + grow) * cornerGrowth;
         juce::Path path;
         path.addRoundedRectangle(ringRect, cornerRadius);
         const float pathLength = path.getLength();

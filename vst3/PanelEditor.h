@@ -208,6 +208,9 @@ private:
        scoped-repaint call so neither can drift from the other's idea of
        the band. */
     juce::Rectangle<float> vfdHaloBand(juce::Rectangle<float> vfdDesign) const;
+    /* The "vfdHalo" layout entry, read once here so vfdHaloBand() and
+       paintVfdHalo() share one definition and cannot disagree about it. */
+    juce::Rectangle<int> vfdHaloConfig() const;
 
     Eps16PlusProcessor &owner;
     VfdLabel vfd;
