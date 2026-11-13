@@ -970,7 +970,7 @@ juce::Rectangle<int> Eps16PanelEditor::designRect(const juce::String &name,
    (periodSec); spread is design units. One definition, used by both
    vfdHaloBand() and paintVfdHalo(), so they cannot disagree about it. */
 juce::Rectangle<int> Eps16PanelEditor::vfdHaloConfig() const {
-    return designRect("vfdHalo", 3, 5, 25, 8);
+    return designRect("vfdHalo", 3, 7, 25, 8);
 }
 
 juce::Rectangle<float>
@@ -1038,6 +1038,13 @@ void Eps16PanelEditor::paintVfdHalo(juce::Graphics &graphics,
         const float grow = (float)(f * spread);
         const double falloff = std::pow(1.0 - f, falloffExp);
         const double ringAlpha = peakAlpha * falloff;
+        // Exact, not approximate: level()'s maximum is exactly 1.0, so
+        // alpha = ringAlpha * max(0, level(theta)) can never exceed
+        // ringAlpha. If ringAlpha already can't clear the per-segment
+        // draw threshold, no point on this ring ever could either - skip
+        // its 221 getPointAlongPath() calls and the path/getLength() that
+        // precede them entirely; no pixel changes.
+        if (ringAlpha <= 1.0 / 255.0) continue;
         const float strokeWidth = (float)((spread / rings) * 2.1) * scale;
 
         const auto ringRect = base.expanded(grow);
