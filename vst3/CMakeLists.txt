@@ -453,11 +453,6 @@ target_link_libraries(eps16_vst3_editor_smoke_test PRIVATE
 add_test(NAME vst3_editor_smoke COMMAND eps16_vst3_editor_smoke_test)
 add_test(NAME vst3_synthetic_machine_start
          COMMAND eps16_vst3_editor_smoke_test --synthetic-startup)
-# macOS-only: --halo-soak reads RSS via mach_task_basic_info, so the
-# non-macOS branch just reports "skipped" rather than being registered
-# conditionally here, keeping this test's set of platforms consistent
-# whichever CI workflow filters it by name with ctest -R.
-add_test(NAME vst3_halo_soak COMMAND eps16_vst3_editor_smoke_test --halo-soak)
 option(EPS16_WINDOWS_ASAN "Instrument the Windows machine-start test" OFF)
 if(MSVC AND EPS16_WINDOWS_ASAN)
   foreach(TARGET_NAME Eps16Plus eps16_vst3_bridge musashi_vst

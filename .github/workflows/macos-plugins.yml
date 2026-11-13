@@ -11,14 +11,6 @@ on:
 permissions:
   contents: read
 
-# One live run per branch.  Hosted macOS jobs sometimes sit in "queued"
-# without ever being acquired by a runner; without a group, a second push
-# just queues behind the stuck one.  With it, the newer push cancels the
-# older run, so re-pushing is enough to clear a stuck queue.
-concurrency:
-  group: macos-plugins-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   build-macos-plugins:
     runs-on: macos-15
@@ -26,7 +18,7 @@ jobs:
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Fetch JUCE 8.0.13
         run: git clone --depth 1 --branch 8.0.13 https://github.com/juce-framework/JUCE.git work/deps/JUCE
@@ -75,37 +67,9 @@ jobs:
           ctest --test-dir work/vst3-build --output-on-failure
           ctest --test-dir work/vst3-build-high-sierra --output-on-failure
 
-      # --output-on-failure only prints a test's stdout if it fails, and
-      # vst3_halo_soak is expected to pass (its ceilings are deliberately
-      # loose placeholders) - so its printed mean-paint-time/RSS figures
-      # need -V (verbose, unconditional output) or they never reach this
-      # log at all. Already run once above as part of the unfiltered
-      # suite; -R re-runs only this one test to get its output visible.
-      - name: Show halo soak measurements
-        run: ctest --test-dir work/vst3-build -R vst3_halo_soak -V
-
-      # JUCE's per-object leak detector (JUCE_LEAK_DETECTOR) is compiled
-      # out of Release builds; in Debug it aborts at process exit if any
-      # tracked JUCE object outlived its owner - the cheapest real leak
-      # check available, and one that was not running at all until now.
-      # Native arch only, and only the one target this test needs, to
-      # keep this additive rather than doubling the whole build.
-      - name: Configure Debug smoke test (JUCE leak detector)
-        run: |
-          cmake -S . -B work/vst3-build-debug \
-            -DEPS16_BUILD_VST3=ON \
-            -DEPS16_JUCE_DIR="$PWD/work/deps/JUCE" \
-            -DCMAKE_BUILD_TYPE=Debug \
-            -DCMAKE_OSX_ARCHITECTURES=arm64
-
-      - name: Build and run Debug smoke test (JUCE leak detector)
-        run: |
-          cmake --build work/vst3-build-debug --target eps16_vst3_editor_smoke_test -j 4
-          ctest --test-dir work/vst3-build-debug -R "vst3_editor_smoke|vst3_synthetic_machine_start|vst3_halo_soak" --output-on-failure
-
       - name: Upload macOS universal package
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: Ensoniq-EPS-16-Plus-macOS-universal
           path: work/vst3-build/universal-plugin-package/Ensoniq-EPS-16-Plus-*-macOS-universal.zip

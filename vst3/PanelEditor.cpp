@@ -4,7 +4,6 @@
 
 #include <algorithm>
 #include <array>
-#include <cmath>
 #include <cstring>
 #include <utility>
 
@@ -16,17 +15,6 @@ constexpr int expandedRackHeight = rackHeight + keyboardHeight;
 const juce::Colour buttonColour{0xff252625};
 const juce::Colour displayColour{0xff55eaff};
 const juce::Colour displayDimColour{0xff17353a};
-/* VfdLabel::paint() fills its entire bounds with opaque black
-   (findColour(Label::backgroundColourId)), square-cornered, exactly the
-   vfd rect, and JUCE paints children after their parent - so the glow
-   must start flush at that rect, not pushed out into the background
-   artwork's cutout surround (which the label paints over completely).
-   Kept even at 0: the knob for tucking the glow under the glass later,
-   where negative values are valid; removing them would mean
-   re-deriving this. vfdHaloBand() and paintVfdHalo() both read these -
-   not two independently-declared copies - so they cannot disagree. */
-constexpr float vfdHaloBezelOffsetX = 0.0f;
-constexpr float vfdHaloBezelOffsetY = 0.0f;
 const juce::Colour rackLabelColour{0xffe8e5df};
 
 /* Development-time overrides live alongside the ROM/OS files the user
@@ -960,149 +948,6 @@ juce::Rectangle<int> Eps16PanelEditor::designRect(const juce::String &name,
     return {x, y, width, height};
 }
 
-/* "vfdHalo": [style, intensity, cycle, spread] is a plain four-number
-   layout entry, so loadLayoutOverrides()'s existing contract (any
-   four-element numeric array is stored by name, unparsed) already covers
-   it - nothing there changes. designRect()'s x/y/width/height just become
-   style/intensity/cycle/spread here; the "vfdHalo" name is never treated
-   as a position. style 0 = off, 1 = breathe, 2 = drift, 3 = shimmer;
-   intensity is a percent (peakAlpha); cycle is tenths of a second
-   (periodSec); spread is design units. One definition, used by both
-   vfdHaloBand() and paintVfdHalo(), so they cannot disagree about it. */
-juce::Rectangle<int> Eps16PanelEditor::vfdHaloConfig() const {
-    return designRect("vfdHalo", 3, 7, 25, 8);
-}
-
-juce::Rectangle<float>
-Eps16PanelEditor::vfdHaloBand(juce::Rectangle<float> vfdDesign) const {
-    const auto config = vfdHaloConfig();
-    if (config.getX() <= 0) return {};
-    const float spread = (float)juce::jmax(0, config.getHeight());
-    return vfdDesign.expanded(vfdHaloBezelOffsetX + spread,
-                              vfdHaloBezelOffsetY + spread);
-}
-
-/* Builds haloRings: every ring's perimeter points and base alpha, all in
-   design space, independent of time and scale - a window resize changes
-   only the scale multiplier paintVfdHalo() applies at draw time, not
-   this cache. Rings whose alpha can never clear the 1/255 draw
-   threshold are skipped entirely here rather than filtered per-segment
-   every frame - exact, not approximate, since level()'s maximum is
-   exactly 1.0 (level = 1 - depth/2 + depth/2 * X, X in [-1,1]), so
-   alpha = ringAlpha * max(0, level(theta)) can never exceed ringAlpha. */
-void Eps16PanelEditor::rebuildHaloRings() {
-    haloRings.clear();
-    const auto vfdDesign = designRect("vfd", 452, 61, 447, 103).toFloat();
-    const auto config = vfdHaloConfig();
-    const int style = config.getX();
-    if (style <= 0) return;
-    const double peakAlpha = (double)juce::jlimit(0, 100, config.getY()) / 100.0;
-    const double spread = (double)juce::jmax(0, config.getHeight());
-    if (peakAlpha <= 0.0 || spread <= 0.0) return;
-
-    // fillAll() does no corner rounding at all, so with both bezel offsets
-    // at 0 there is no base radius either - the radius is pure growth.
-    constexpr float cornerBase = 0.0f;
-    constexpr float cornerGrowth = 0.25f;
-    constexpr int rings = 14;
-    constexpr double falloffExp = 1.9;
-    constexpr int pointsPerRing = 220;
-
-    // Centred on the screen's own edge (vfdHaloBezelOffsetX/Y), not the
-    // background artwork's cutout surround: the innermost rings are drawn
-    // half underneath VfdLabel's opaque black fill, which paints after
-    // this (JUCE paints children after their parent) - that is what makes
-    // the glow read as light escaping from behind the glass rather than a
-    // ring sitting on the panel, not a clipping bug.
-    const auto base = vfdDesign.expanded(vfdHaloBezelOffsetX, vfdHaloBezelOffsetY);
-    const auto centre = base.getCentre();
-
-    for (int ring = rings; ring >= 1; --ring) {
-        const double f = (double)ring / rings;
-        const float grow = (float)(f * spread);
-        const double falloff = std::pow(1.0 - f, falloffExp);
-        const double ringAlpha = peakAlpha * falloff;
-        if (ringAlpha <= 1.0 / 255.0) continue;
-
-        const auto ringRect = base.expanded(grow);
-        const float cornerRadius =
-            cornerBase +
-            (juce::jmax(vfdHaloBezelOffsetX, vfdHaloBezelOffsetY) + grow) * cornerGrowth;
-        juce::Path path;
-        path.addRoundedRectangle(ringRect, cornerRadius);
-        const float pathLength = path.getLength();
-
-        HaloRing haloRing;
-        haloRing.alpha = ringAlpha;
-        haloRing.strokeWidth = (float)((spread / rings) * 2.1);
-        haloRing.pts.reserve((size_t)pointsPerRing + 1);
-        juce::Point<float> previous;
-        for (int index = 0; index <= pointsPerRing; ++index) {
-            const float distance =
-                pathLength * (float)index / (float)pointsPerRing;
-            const auto point = path.getPointAlongPath(distance);
-            double theta = 0.0;
-            if (index > 0) {
-                const auto mid = (previous + point) * 0.5f;
-                theta = std::atan2((double)(mid.y - centre.y),
-                                   (double)(mid.x - centre.x));
-            }
-            haloRing.pts.push_back({point.x, point.y, theta});
-            previous = point;
-        }
-        haloRings.push_back(std::move(haloRing));
-    }
-}
-
-void Eps16PanelEditor::paintVfdHalo(juce::Graphics &graphics,
-                                    float scale) const {
-    if (haloRings.empty()) return;
-    const auto config = vfdHaloConfig();
-    const int style = config.getX();
-    const double periodSec = (double)juce::jmax(1, config.getWidth()) / 10.0;
-
-    // Values fixed at the live-mockup defaults; see docs/ (or the task
-    // this came from) rather than the layout file - only style, intensity,
-    // cycle and spread are meant to be tunable there.
-    constexpr double depth = 0.80;
-    const double now = juce::Time::getMillisecondCounterHiRes() / 1000.0;
-    const double omega = juce::MathConstants<double>::twoPi / periodSec;
-
-    // Continuous in theta, not per-edge: four independently-modulated
-    // edges cannot meet, so the halo would visibly break at every corner.
-    const auto level = [&](double theta) {
-        switch (style) {
-            case 1: // breathe: uniform brightness, no angle dependence.
-                return 1.0 - depth / 2.0 + (depth / 2.0) * std::sin(omega * now);
-            case 2: // drift: a single point rotating around the perimeter.
-                return 1.0 - depth / 2.0 +
-                       (depth / 2.0) * std::cos(omega * now - theta);
-            default: // shimmer: two irrational-ratio sines, never in phase.
-                return 1.0 - depth / 2.0 +
-                       (depth / 2.0) *
-                           (0.62 * std::sin(omega * now - theta) +
-                            0.38 * std::sin(omega * 0.61803 * now + 2.0 * theta));
-        }
-    };
-
-    for (const auto &ring : haloRings) {
-        const float strokeWidth = ring.strokeWidth * scale;
-        for (std::size_t index = 1; index < ring.pts.size(); ++index) {
-            const auto &previous = ring.pts[index - 1];
-            const auto &point = ring.pts[index];
-            const double alpha = ring.alpha * juce::jmax(0.0, level(point.theta));
-            if (alpha <= 1.0 / 255.0) continue;
-            graphics.setColour(displayColour.withAlpha((float)alpha));
-            // Plain rectangular segments (Path::addLineSegment under the
-            // hood), butt-ended like the strokePath() call this replaced -
-            // not round caps, which would double the brightness at every
-            // joint under per-segment alpha and render as a comb of ticks.
-            graphics.drawLine(previous.x * scale, previous.y * scale,
-                              point.x * scale, point.y * scale, strokeWidth);
-        }
-    }
-}
-
 Eps16PanelEditor::Eps16PanelEditor(Eps16PlusProcessor &processorToUse)
     : AudioProcessorEditor(processorToUse), owner(processorToUse),
       pianoKeyboard(processorToUse) {
@@ -1110,7 +955,6 @@ Eps16PanelEditor::Eps16PanelEditor(Eps16PlusProcessor &processorToUse)
 
     loadPanelImages();
     loadLayoutOverrides();
-    rebuildHaloRings();
 
     setResizable(true, true);
     setResizeLimits(1080, 304, 1620, 456);
@@ -1655,19 +1499,6 @@ void Eps16PanelEditor::timerCallback() {
         trackLedFlashPhase = nextTrackPhase;
         repaint();
     }
-    // The halo animates continuously regardless of emulator state, unlike
-    // the track LEDs above, so it repaints every tick rather than only on
-    // a change - but still only its own band, not the whole panel.
-    const float scale = (float)getWidth() / (float)rackWidth;
-    const auto haloBand =
-        vfdHaloBand(designRect("vfd", 452, 61, 447, 103).toFloat());
-    if (!haloBand.isEmpty()) {
-        repaint(juce::Rectangle<int>(
-            juce::roundToInt(haloBand.getX() * scale),
-            juce::roundToInt(haloBand.getY() * scale),
-            juce::roundToInt(haloBand.getWidth() * scale),
-            juce::roundToInt(haloBand.getHeight() * scale)));
-    }
     if (slowUpdate)
         status.setText(
             "DAW-driven CPU cycles: " + juce::String(owner.cpuCycles()) +
@@ -1693,12 +1524,6 @@ void Eps16PanelEditor::paint(juce::Graphics &graphics) {
                        panelBackground.getWidth(),
                        panelBackground.getHeight());
     if (pageButtons.front() == nullptr) return;
-
-    // Shimmering halo around the VFD cutout. Drawn here, under the VFD
-    // child component (JUCE paints children after their parent), so the
-    // glow reads as light escaping from behind the glass rather than
-    // sitting on top of it.
-    paintVfdHalo(graphics, scale);
 
     // Track LED drawing — dynamic emulator state, not baked into the
     // background PNG. track_led.png is three vertically stacked frames of
@@ -1759,7 +1584,6 @@ void Eps16PanelEditor::resized() {
     vfd.setFont(juce::Font(juce::FontOptions("Menlo", 17.0f * scale,
                                              juce::Font::plain)));
     status.setBounds({});
-    rebuildHaloRings();
 
     // ── Faders (w=76, h=244; positions SWAPPED vs original) ──────────────
     masterVolume.setBounds(
