@@ -1,20 +1,12 @@
-EPS-16 Plus Audio Unit and VST3 Emulator
+# Ensoniq EPS-16 Plus Audio Unit and VST3 Emulator
 
 Hardware-level emulation of the Ensoniq EPS-16 Plus sampler for macOS and
 Windows, built as a resizable Audio Unit and VST3 instrument.
 
-> **This repository was previously a GitHub fork** of
+> **This is a fork.** Upstream is
 > [mardlib/Ensoniq-EPS-16-Plus](https://github.com/mardlib/Ensoniq-EPS-16-Plus),
-> where all of the emulation work lives, and before that of
-> [DustyHammers/Ensoniq-EPS-16-Plus](https://github.com/DustyHammers/Ensoniq-EPS-16-Plus),
-> which added a hardware-accurate sprite-based skin on top of that emulation
-> work. It was copied here with full history on 2026-11-12 and detached from
-> the GitHub fork network after the forked repo's GitHub Actions macOS
-> runners repeatedly failed to ever be acquired (jobs queued with zero steps,
-> auto-cancelled at ~15 minutes) while every other repo on the same account
-> built normally, including at the same moment. The original fork at
-> DustyHammers/Ensoniq-EPS-16-Plus is left as-is; this repo is where
-> development continues.
+> where all of the emulation work lives. This fork replaces the procedurally
+> drawn front panel with a hardware-accurate sprite-based skin.
 
 This project builds on and references open-source work by Karl Stenerud,
 Aaron Giles, Christian Brunschen, MAMEdev, Raw Material Software and their

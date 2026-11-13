@@ -9,10 +9,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: windows-vst3-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   build-windows-vst3:
     runs-on: windows-2022
@@ -20,7 +16,7 @@ jobs:
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Fetch JUCE 8.0.13
         shell: pwsh
@@ -46,7 +42,7 @@ jobs:
         run: cmake --build work/windows-vst3-build --config Release --target eps16_vst3_package --parallel
 
       - name: Upload Windows VST3
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: Ensoniq-EPS-16-Plus-Windows-x64
           path: work/windows-vst3-build/vst3-package/Ensoniq-EPS-16-Plus-*-Windows-x64.zip
