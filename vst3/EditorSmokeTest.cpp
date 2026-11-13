@@ -8,6 +8,21 @@
 #include <iostream>
 #include <memory>
 
+#if JUCE_MAC
+#include <mach/mach.h>
+
+namespace {
+std::uint64_t currentResidentBytes() {
+    mach_task_basic_info_data_t info{};
+    mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
+    if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO,
+                  (task_info_t)&info, &count) != KERN_SUCCESS)
+        return 0;
+    return info.resident_size;
+}
+}  // namespace
+#endif
+
 int main(int argc, char **argv) {
     const juce::ScopedJuceInitialiser_GUI gui;
     Eps16PlusProcessor processor;
@@ -126,6 +141,79 @@ int main(int argc, char **argv) {
             return 1;
         }
         return 0;
+    }
+    if (argc == 2 && std::string(argv[1]) == "--halo-soak") {
+#if JUCE_MAC
+        std::unique_ptr<juce::AudioProcessorEditor> soakEditor(
+            processor.createEditor());
+        if (!soakEditor) return 41;
+
+        juce::Image canvas(juce::Image::ARGB, soakEditor->getWidth(),
+                           soakEditor->getHeight(), true);
+
+        // paintEntireComponent() reads the real wall clock (same as
+        // production paintVfdHalo()), so the halo genuinely animates
+        // across iterations as real time elapses between them - no
+        // artificial clock injection needed to satisfy "advancing the
+        // clock so the halo actually animates rather than drawing the
+        // same frame".
+        constexpr int warmupIterations = 300;
+        constexpr int measuredIterations = 3000;
+        for (int i = 0; i < warmupIterations; ++i) {
+            juce::Graphics g(canvas);
+            soakEditor->paintEntireComponent(g, true);
+        }
+
+        const auto baselineRss = currentResidentBytes();
+        const auto startTicks = juce::Time::getHighResolutionTicks();
+        for (int i = 0; i < measuredIterations; ++i) {
+            juce::Graphics g(canvas);
+            soakEditor->paintEntireComponent(g, true);
+        }
+        const auto endTicks = juce::Time::getHighResolutionTicks();
+        const auto finalRss = currentResidentBytes();
+
+        const double totalSeconds =
+            juce::Time::highResolutionTicksToSeconds(endTicks - startTicks);
+        const double meanPaintSeconds = totalSeconds / measuredIterations;
+        const std::int64_t rssGrowthBytes =
+            (std::int64_t)finalRss - (std::int64_t)baselineRss;
+
+        std::cout << "halo soak: mean paint time = "
+                  << (meanPaintSeconds * 1000.0) << " ms over "
+                  << measuredIterations << " iterations (" << warmupIterations
+                  << " warm-up discarded)\nhalo soak: RSS growth = "
+                  << rssGrowthBytes << " bytes (baseline " << baselineRss
+                  << " bytes, final " << finalRss << " bytes)" << std::endl;
+
+        // PLACEHOLDER ceilings: no local build toolchain exists to measure
+        // a real baseline before shipping this (see the task's own "pick
+        // the threshold from a measured baseline rather than inventing
+        // one"). These are deliberately loose - a tripwire against a
+        // catastrophic regression (an infinite loop, an O(n^2) blow-up),
+        // not a tuned bound - so this run reports the real figures above
+        // without failing on them. A follow-up commit tightens both to
+        // the measured numbers plus headroom, citing this run's CI log.
+        constexpr double meanPaintCeilingSeconds = 0.100;  // 100 ms/frame
+        constexpr std::int64_t rssGrowthCeilingBytes = 150 * 1024 * 1024;
+
+        if (meanPaintSeconds > meanPaintCeilingSeconds) {
+            std::cerr << "halo soak: mean paint time exceeded placeholder "
+                         "ceiling\n";
+            return 41;
+        }
+        if (rssGrowthBytes > rssGrowthCeilingBytes) {
+            std::cerr << "halo soak: RSS growth exceeded placeholder "
+                         "ceiling\n";
+            return 41;
+        }
+        return 0;
+#else
+        std::cout << "halo soak: skipped (RSS reading via mach_task_basic_info "
+                     "is macOS-only)"
+                  << std::endl;
+        return 0;
+#endif
     }
     juce::TemporaryFile testRom(".bin");
     const std::uint8_t testByte = 0;

@@ -75,6 +75,25 @@ jobs:
           ctest --test-dir work/vst3-build --output-on-failure
           ctest --test-dir work/vst3-build-high-sierra --output-on-failure
 
+      # JUCE's per-object leak detector (JUCE_LEAK_DETECTOR) is compiled
+      # out of Release builds; in Debug it aborts at process exit if any
+      # tracked JUCE object outlived its owner - the cheapest real leak
+      # check available, and one that was not running at all until now.
+      # Native arch only, and only the one target this test needs, to
+      # keep this additive rather than doubling the whole build.
+      - name: Configure Debug smoke test (JUCE leak detector)
+        run: |
+          cmake -S . -B work/vst3-build-debug \
+            -DEPS16_BUILD_VST3=ON \
+            -DEPS16_JUCE_DIR="$PWD/work/deps/JUCE" \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_OSX_ARCHITECTURES=arm64
+
+      - name: Build and run Debug smoke test (JUCE leak detector)
+        run: |
+          cmake --build work/vst3-build-debug --target eps16_vst3_editor_smoke_test -j 4
+          ctest --test-dir work/vst3-build-debug -R "vst3_editor_smoke|vst3_synthetic_machine_start|vst3_halo_soak" --output-on-failure
+
       - name: Upload macOS universal package
         if: always()
         uses: actions/upload-artifact@v6
