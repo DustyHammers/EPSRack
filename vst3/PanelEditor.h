@@ -197,6 +197,46 @@ private:
     juce::Rectangle<int> designRect(const juce::String &name, int x, int y,
                                     int width, int height) const;
     void updatePatchSelectAnalog();
+    /* A halo ring's perimeter point, in design space, with the angle from
+       the halo's centre to this point's segment midpoint precomputed
+       (point 0 of each ring has no meaningful theta - it is only ever
+       used as a segment's start, never its end). */
+    struct HaloPoint {
+        float x, y;
+        double theta;
+    };
+    /* alpha is the ring's base alpha (peakAlpha * falloff), independent of
+       time and angle - paintVfdHalo() still multiplies it by level(theta)
+       per segment, every frame, since that does depend on time. */
+    struct HaloRing {
+        double alpha;
+        float strokeWidth;
+        std::vector<HaloPoint> pts;
+    };
+    /* Reads haloRings (design-space, time- and scale-independent) rather
+       than recomputing any geometry, so this only walks cached points,
+       evaluates level(theta) and draws - no per-frame Path construction
+       or path-length flattening. scale is applied here, at draw time,
+       exactly as the cache-building code applies it nowhere at all. */
+    void paintVfdHalo(juce::Graphics &, float scale) const;
+    /* Design-space band the halo can paint into (vfd expanded by the
+       bezel offset and the configured spread), or an empty rectangle if
+       vfdHalo's style is off. Shared by paint() and the timer's
+       scoped-repaint call so neither can drift from the other's idea of
+       the band. */
+    juce::Rectangle<float> vfdHaloBand(juce::Rectangle<float> vfdDesign) const;
+    /* The "vfdHalo" layout entry, read once here so vfdHaloBand() and
+       paintVfdHalo() share one definition and cannot disagree about it. */
+    juce::Rectangle<int> vfdHaloConfig() const;
+    /* Rebuilds haloRings from the vfd design rect and vfdHaloConfig() -
+       every ring's perimeter points (with their precomputed theta) and
+       base alpha, all in design space. Called from the constructor
+       (after loadLayoutOverrides()) and from resized(), never lazily
+       from paintVfdHalo() - that function is const, and a mutable cache
+       would hide the invalidation rather than state it. Not called from
+       the 30Hz timer: nothing it reads changes after construction, only
+       paintVfdHalo()'s time- and scale-dependent per-frame math does. */
+    void rebuildHaloRings();
 
     Eps16PlusProcessor &owner;
     VfdLabel vfd;
@@ -210,6 +250,7 @@ private:
     juce::Image sliderThumb;
     juce::Image trackLedSprite;
     std::map<juce::String, juce::Rectangle<int>> layoutOverrides;
+    std::vector<HaloRing> haloRings;
     juce::Slider masterVolume;
     juce::Slider dataEntry;
     DiskButton osDiskButton{"Insert OS disk", "OS"};
