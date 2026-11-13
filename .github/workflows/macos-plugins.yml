@@ -75,6 +75,15 @@ jobs:
           ctest --test-dir work/vst3-build --output-on-failure
           ctest --test-dir work/vst3-build-high-sierra --output-on-failure
 
+      # --output-on-failure only prints a test's stdout if it fails, and
+      # vst3_halo_soak is expected to pass (its ceilings are deliberately
+      # loose placeholders) - so its printed mean-paint-time/RSS figures
+      # need -V (verbose, unconditional output) or they never reach this
+      # log at all. Already run once above as part of the unfiltered
+      # suite; -R re-runs only this one test to get its output visible.
+      - name: Show halo soak measurements
+        run: ctest --test-dir work/vst3-build -R vst3_halo_soak -V
+
       # JUCE's per-object leak detector (JUCE_LEAK_DETECTOR) is compiled
       # out of Release builds; in Debug it aborts at process exit if any
       # tracked JUCE object outlived its owner - the cheapest real leak
