@@ -186,25 +186,23 @@ int main(int argc, char **argv) {
                   << rssGrowthBytes << " bytes (baseline " << baselineRss
                   << " bytes, final " << finalRss << " bytes)" << std::endl;
 
-        // PLACEHOLDER ceilings: no local build toolchain exists to measure
-        // a real baseline before shipping this (see the task's own "pick
-        // the threshold from a measured baseline rather than inventing
-        // one"). These are deliberately loose - a tripwire against a
-        // catastrophic regression (an infinite loop, an O(n^2) blow-up),
-        // not a tuned bound - so this run reports the real figures above
-        // without failing on them. A follow-up commit tightens both to
-        // the measured numbers plus headroom, citing this run's CI log.
-        constexpr double meanPaintCeilingSeconds = 0.100;  // 100 ms/frame
-        constexpr std::int64_t rssGrowthCeilingBytes = 150 * 1024 * 1024;
+        // Measured baseline, EPSRack run 43349566975 (arm64, Release,
+        // skin-111 @ 34c5580): mean paint time 6.18 ms over 3000
+        // iterations; RSS growth -49152 bytes (it shrank - no growth at
+        // all, within noise). Ceilings below are that measured mean paint
+        // time with ~4x headroom, and a few MB for RSS growth where the
+        // measured figure was negative - still a real tripwire against a
+        // regression, not the loose 100ms/150MB placeholders this
+        // replaced.
+        constexpr double meanPaintCeilingSeconds = 0.025;  // 25 ms/frame
+        constexpr std::int64_t rssGrowthCeilingBytes = 5 * 1024 * 1024;
 
         if (meanPaintSeconds > meanPaintCeilingSeconds) {
-            std::cerr << "halo soak: mean paint time exceeded placeholder "
-                         "ceiling\n";
+            std::cerr << "halo soak: mean paint time exceeded ceiling\n";
             return 41;
         }
         if (rssGrowthBytes > rssGrowthCeilingBytes) {
-            std::cerr << "halo soak: RSS growth exceeded placeholder "
-                         "ceiling\n";
+            std::cerr << "halo soak: RSS growth exceeded ceiling\n";
             return 41;
         }
         return 0;
