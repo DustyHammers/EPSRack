@@ -959,17 +959,18 @@ juce::Rectangle<int> Eps16PanelEditor::designRect(const juce::String &name,
    (periodSec); spread is design units. */
 juce::Rectangle<float>
 Eps16PanelEditor::vfdHaloBand(juce::Rectangle<float> vfdDesign) const {
-    constexpr float bezelOffset = 5.0f;
-    const auto config = designRect("vfdHalo", 3, 24, 55, 10);
+    constexpr float bezelOffsetX = 5.0f;
+    constexpr float bezelOffsetY = 3.5f;
+    const auto config = designRect("vfdHalo", 3, 5, 25, 8);
     if (config.getX() <= 0) return {};
     const float spread = (float)juce::jmax(0, config.getHeight());
-    return vfdDesign.expanded(bezelOffset + spread);
+    return vfdDesign.expanded(bezelOffsetX + spread, bezelOffsetY + spread);
 }
 
 void Eps16PanelEditor::paintVfdHalo(juce::Graphics &graphics,
                                     juce::Rectangle<float> vfdDesign,
                                     float scale) const {
-    const auto config = designRect("vfdHalo", 3, 24, 55, 10);
+    const auto config = designRect("vfdHalo", 3, 5, 25, 8);
     const int style = config.getX();
     if (style <= 0) return;
     const double peakAlpha = (double)juce::jlimit(0, 100, config.getY()) / 100.0;
@@ -981,13 +982,21 @@ void Eps16PanelEditor::paintVfdHalo(juce::Graphics &graphics,
     // this came from) rather than the layout file - only style, intensity,
     // cycle and spread are meant to be tunable there.
     constexpr double depth = 0.80;
-    constexpr float bezelOffset = 5.0f;
+    // The bezel gap is not uniform (measured off panel_background.png:
+    // ~5 units horizontally, ~3.5 vertically), so it is not one constant.
+    constexpr float bezelOffsetX = 5.0f;
+    constexpr float bezelOffsetY = 3.5f;
+    // A true offset curve (radius = distance expanded outward) reads as a
+    // bubble around a square cutout; damp it instead of tracking the full
+    // offset.
+    constexpr float cornerBase = 1.0f;
+    constexpr float cornerGrowth = 0.30f;
     constexpr int rings = 14;
     constexpr double falloffExp = 1.9;
 
     // Start at the cutout, not the glass, or the glow reads as plastic
     // glowing rather than light escaping from behind it.
-    const auto base = vfdDesign.expanded(bezelOffset);
+    const auto base = vfdDesign.expanded(bezelOffsetX, bezelOffsetY);
     const auto centre = base.getCentre();
     const double now = juce::Time::getMillisecondCounterHiRes() / 1000.0;
     const double omega = juce::MathConstants<double>::twoPi / periodSec;
@@ -1018,7 +1027,8 @@ void Eps16PanelEditor::paintVfdHalo(juce::Graphics &graphics,
         const float strokeWidth = (float)((spread / rings) * 2.1) * scale;
 
         const auto ringRect = base.expanded(grow);
-        const float cornerRadius = 4.0f + bezelOffset + grow;
+        const float cornerRadius =
+            cornerBase + (juce::jmax(bezelOffsetX, bezelOffsetY) + grow) * cornerGrowth;
         juce::Path path;
         path.addRoundedRectangle(ringRect, cornerRadius);
         const float pathLength = path.getLength();
