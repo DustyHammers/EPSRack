@@ -67,6 +67,19 @@ jobs:
           ctest --test-dir work/vst3-build --output-on-failure
           ctest --test-dir work/vst3-build-high-sierra --output-on-failure
 
+      # CI has no EPS_files, so this renders only the artwork baked into
+      # the binary - a look at the embedded skin without installing.
+      - name: Snapshot the editor
+        run: work/vst3-build/vst3/eps16_vst3_editor_smoke_test "$PWD/work/editor-snapshot.png"
+
+      - name: Upload editor snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: editor-snapshot
+          path: work/editor-snapshot.png
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Upload macOS universal package
         if: always()
         uses: actions/upload-artifact@v4
