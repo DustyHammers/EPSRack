@@ -564,8 +564,9 @@ void Eps16PanelEditor::PatchSelectButton::paintButton(
         return;
     }
 
-    /* No sheet (sprite_large_grey.png absent): procedural moulded cap in
-       the same lighter grey as the hardware's patch-select keys. */
+    /* The sheet is baked in, so this only runs if it failed to decode:
+       procedural moulded cap in the same lighter grey as the hardware's
+       patch-select keys. */
     const auto bounds = getLocalBounds().toFloat();
     auto colour = juce::Colour(0xff5c5c5e);
     if (highlighted) colour = colour.brighter(0.10f);
@@ -889,13 +890,10 @@ void Eps16PanelEditor::loadPanelImages() {
                                      BinaryData::sprite_large_black_png,
                                      BinaryData::sprite_large_black_pngSize);
     /* Patch Select caps: 96x136, two 96x68 frames (released on top,
-       pressed below), blank - the arrows are printed in the panel caption.
-       Not baked in yet, so this is skin-only and PatchSelectButton falls
-       back to a procedural cap when the file is absent. To bake it: add
-       Resources/sprite_large_grey.png to juce_add_binary_data() in
-       vst3/CMakeLists.txt and pass BinaryData::sprite_large_grey_png /
-       _pngSize here in place of the nullptr, 0. */
-    spriteLargeGrey = loadSkinnable("sprite_large_grey.png", nullptr, 0);
+       pressed below), blank - the arrows are printed in the panel caption. */
+    spriteLargeGrey = loadSkinnable("sprite_large_grey.png",
+                                    BinaryData::sprite_large_grey_png,
+                                    BinaryData::sprite_large_grey_pngSize);
     sliderThumb = loadSkinnable("slider_thumb.png", BinaryData::slider_thumb_png,
                                 BinaryData::slider_thumb_pngSize);
     faderLookAndFeel.thumbImage = sliderThumb;

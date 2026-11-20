@@ -194,6 +194,7 @@ juce_add_binary_data(Eps16UIAssets SOURCES
   Resources/sprite_small_black.png
   Resources/sprite_small_grey.png
   Resources/sprite_large_black.png
+  Resources/sprite_large_grey.png
   Resources/slider_thumb.png
   Resources/track_led.png
 )
